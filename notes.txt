@@ -1,0 +1,24 @@
+APACHE BEAM MAIN CONCEPTS TO REMEMBER 
+
+1. MAIN CONCEPTS OF THE BEAM MODEL 
+PIPELINE => GRAPH OF TRANSFORMATIONS THAT DEFINES DESIRED DATA PROCESSING OPERATIONS. 
+PCOLLECTION => IS A DATASET OR DATASTREAM 
+PTRANSFORM =>  A PTransform (or transform) represents a data processing operation, or a step, in your pipeline
+AGGREGATION => COMPUTING VALUE FROM ONE OR MULTIPLE INPUT ELEMENTS 
+USER DEFINED FUNCTIONS => Some Beam operations allow you to run user-defined code as a way to configure the transform.
+THIS IS WHERE FUNCTIONS CAN BE APPLIED HERE 
+SCHEMA => ELEMENTS INSIDE A PCOLLECTION 
+SDK => IE PYTHON, GOLANG 
+A language-specific library that lets pipeline authors build transforms, 
+construct their pipelines, and submit them to a runner.
+RUNNER => RUNS BEAM PIPELINES USING THE CAPABILITIES OF CHOSEN DATA PROCESSING ENGINE 
+WINDOW =>  Windows enable grouping operations over collections that grow over time by dividing 
+the collection into windows of finite collections
+WATERMARK => Watermark - A watermark is a guess as to when all data in a certain 
+window is expected to have arrived. 
+TRIGGER => A TRIGGER DETERMINES WHEN TO AGGREGATE RESULTS OF EACH WINDOW 
+STATE AND FILTERS => 
+Per-key state and timer callbacks are lower level primitives that give you full control 
+over aggregating input collections that grow over time.
+
+SPLITTABLE DOFN => Splittable DoFns let you process elements in a non-monolithic way. 
