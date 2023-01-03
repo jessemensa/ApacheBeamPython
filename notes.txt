@@ -3,22 +3,180 @@ APACHE BEAM MAIN CONCEPTS TO REMEMBER
 1. MAIN CONCEPTS OF THE BEAM MODEL 
 PIPELINE => GRAPH OF TRANSFORMATIONS THAT DEFINES DESIRED DATA PROCESSING OPERATIONS. 
 PCOLLECTION => IS A DATASET OR DATASTREAM 
+GENERALLY CONTAINS BIGDATA THAT IS TOO BIG TO FIT INTO MEMORY 
+MULTIPLE PIPELINES CANNOT SHARE PCOLLECTION 
+BEAM PIPELINES PROCESS PCOLLECTION AND RUNNER IS REPONSIBLE FOR STORING THE ELEMENTS 
+FEATURES OF PCOLLECTION 
+1. BOUNDED => DATASET IS KNOWN WHICH IS A FIXED SIZE. THIS CAN BE PROCESSED IN BATCH PIPELINES 
+2. UNBOUNDED => DATASET GROWS OVER TIME AND THE ELEMENTS ARE PROCESSED AS THEY ARRIVE 
+TIME STAMPS 
+=> EVERY ELEMENT HAS A TIME STAMP ASSOCIATED WITH IT 
+=> CERTAIN BATCH PROCESSING JOBS WHERE ELEMENTS DO NOT DENOTE EVENTS, 
+TIME STAMP WILL BE REPRESENTABLE TIME STAMP WHICH IS NEGATIVE INFINITY? 
+WATERMARKS 
+=> Every PCollection must have a watermark that estimates how complete the PCollection is.
+=> Data sources are responsible for producing a watermark. The runner must implement 
+=> watermark propagation as PCollections are processed, merged, and partitioned.
+
+WINDOWED ELEMENTS 
+=> Every element in a PCollection resides in a window. No element resides in multiple windows; 
+=> two elements can be equal except for their window, but they are not the same
+CODER 
+=> Every PCollection has a coder, which is a specification of the binary format of the elements.
+
+
 PTRANSFORM =>  A PTransform (or transform) represents a data processing operation, or a step, in your pipeline
-AGGREGATION => COMPUTING VALUE FROM ONE OR MULTIPLE INPUT ELEMENTS 
+A transform is usually applied to one or more input PCollection objects. 
+Transforms that read input are an exception; these transforms might not have an input PCollection.
+
+
+AGGREGATION => COMPUTING VALUE FROM ONE OR MULTIPLE INPUT ELEMENTS
+the primary computational pattern for aggregation is to group all elements with a common 
+key and window then combine each group of elements using an associative and commutative operation. 
+This is similar to Reduce. 
+Some simple aggregations are count, sum or max. 
+When elements are grouped and emitted as a bag, the aggregation is known as 
+GroupByKey (the associative/commutative operation is bag union).
+
+
 USER DEFINED FUNCTIONS => Some Beam operations allow you to run user-defined code as a way to configure the transform.
+Some Beam operations allow you to run user-defined code as a way to configure the transform. 
+For example, when using ParDo, user-defined code specifies what operation to apply to every element. 
+For Combine, it specifies how values should be combined.
 THIS IS WHERE FUNCTIONS CAN BE APPLIED HERE 
+Beam has several UDFs 
+DOfn => per element processing functions 
+WindowFn => places elements in windows and merges windows 
+ViewfN => adapts a materialized PCollection to a particular interface (used in side inputs)
+WindowMappingFn=> maps one element’s window to another, and specifies bounds on how far in the 
+past the result window will be (used in side inputs). 
+CombineFn =>  associative and commutative aggregation (used in Combine and state)
+
+
 SCHEMA => ELEMENTS INSIDE A PCOLLECTION 
+
 SDK => IE PYTHON, GOLANG 
 A language-specific library that lets pipeline authors build transforms, 
 construct their pipelines, and submit them to a runner.
+
 RUNNER => RUNS BEAM PIPELINES USING THE CAPABILITIES OF CHOSEN DATA PROCESSING ENGINE 
+ 
 WINDOW =>  Windows enable grouping operations over collections that grow over time by dividing 
 the collection into windows of finite collections
+
 WATERMARK => Watermark - A watermark is a guess as to when all data in a certain 
 window is expected to have arrived. 
+
 TRIGGER => A TRIGGER DETERMINES WHEN TO AGGREGATE RESULTS OF EACH WINDOW 
-STATE AND FILTERS => 
+STATE AND TIMERS => 
 Per-key state and timer callbacks are lower level primitives that give you full control 
 over aggregating input collections that grow over time.
-
 SPLITTABLE DOFN => Splittable DoFns let you process elements in a non-monolithic way. 
+
+
+EXECUTION MODEL IN BEAM 
+Beam model allows runners to execute pipelines in different ways 
+
+1. The serialization and communication of elements between machines is one of the 
+most expensive operations in a distributed execution of your pipeline.
+
+2. Serialisation and Communication 
+To allow the different parts of the pipeline to communicate with each other and exchange data, 
+the pipeline must be able to serialize the data into a form that can be transmitted over a network.
+Serialization is the process of converting an object or data structure into a sequence of bytes 
+that can be stored or transmitted. Apache Beam provides built-in serializers for common types 
+such as integers and strings, but you can also define custom serializers for your own types.
+RUNNER MAY DECIDE TO TRANSFER ELEMENTS BETWEEN TRANSFORMS IN WAYS 
+A. Routing elements to a worker for processing as part of a grouping operation. 
+This may involve serializing elements and grouping or sorting them by their key.
+B. Redistributing elements between workers to adjust parallelism. 
+This may involve serializing elements and communicating them to other workers.
+C. Using the elements in a side input to a ParDo. This may require serializing the elements 
+and broadcasting them to all the workers executing the ParDo.
+D. Passing elements between transforms that are running on the same worker. 
+
+3. BUNDLING AND PERSISTENCE 
+a pipeline processes data by dividing it into small chunks called bundles. 
+These bundles are processed in parallel, 
+which allows Beam pipelines to be efficient and scalable. However, processing 
+data in parallel can also make it difficult to perform certain types of operations 
+that require a certain order or sequence, such as assigning a sequence number to each
+ element in a collection or writing elements to a sink.
+Beam allows runners (the component responsible for executing the pipeline) to process the data in 
+bundles rather than all at once. This allows the runner to choose a balance between processing 
+data quickly in parallel and being able to handle failures or checkpoints. For example, 
+a streaming runner might process and commit small bundles more frequently, while a batch 
+runner might prefer to process larger bundles. This allows the runner to batch certain operations, 
+such as writing to a sink or checkpointing progress, which can be more efficient than doing 
+these operations for every element.
+
+4. DATA PARTITIONING AND INTER-EXEUTION STAGE 
+the way that data is partitioned and processed in parallel within a pipeline depends 
+on two factors: the data source and the key-based operations being performed.
+The data source is the component that provides the data for the pipeline to process. 
+To be used in Beam, a data source must be implemented as a Splittable DoFn, 
+which provides the runner with interfaces to split the work of reading the data into smaller chunks.
+Key-based operations are operations that are based on the key of the data elements, such as GroupByKey,
+ Combine, Reshuffle.perKey, and stateful DoFns. When running these types of operations, 
+ the runner may need to shuffle the data, which means serializing and transferring the data 
+ elements with the same key to the same location for processing. The way that the runner 
+ shuffles the data may be different for batch and streaming execution modes.
+
+ 5. DATA ORDERING IN A PIPELINE EXECUTION 
+ the order in which data is processed and transmitted within a pipeline may vary depending 
+ on the runner and the specific operations being performed. Some runners may provide 
+ guarantees about the order in which data is delivered, while others may not.
+if a runner supports "key-ordered delivery," it means that it guarantees that data elements
+with the same key will be observed in the same order by a downstream transform, 
+regardless of how the data is transmitted. This can be important in certain use 
+cases where the order of the data elements is important.
+Key-ordered delivery is more likely to be supported in runners and operations that have 
+"key-limited parallelism," which means that the parallelism is limited by the keys of 
+the data elements rather than the number of elements.
+
+FAILURES AND PARALELISM WITHIN AND BETWEEN TRANSFORM 
+WHEN EXECUTING A SINGLE PARDO, A RUNNER MIGHT BE DIVIDE AN INPUT COLLECTION OF MORE THAN 9 ELEMENTS 
+MIGHT BE DIVIDED INTO TWO BUNDLES. 
+WHEN PARDO EXECUTES, WORKERS MAY PROCESS THE TWO BUNDLES IN PARALLEL 
+Since elements cannot be split, the maximum parallelism for a transform depends on 
+the number of elements in the collection.
+Note: Splittable ParDo allows splitting the processing of a single input across multiple bundles. 
+This feature is a work in progress.
+
+DEPENDENT-PARALLELISN BETWEEN TRANSFORM 
+ParDo transforms that are in sequence may be dependently parallel if the runner chooses 
+to execute the consuming transform on the producing transform’s output elements without
+ altering the bundling.
+
+FAILURES BETWEEN ONE TRANSFORM 
+If processing of an element within a bundle fails, the entire bundle fails. The elements in the
+bundle must be retried (otherwise the entire pipeline fails), although they do not need to 
+be retried with the same bundling.
+In figure 6, the first worker successfully processes all five elements in bundle A. 
+The second worker processes the four elements in bundle B: the first two elements were 
+successfully processed, the third element’s processing failed, and there is one element 
+still awaiting processing.
+We see that the runner retries all elements in bundle B and the processing completes successfully 
+the second time. Note that the retry does not necessarily happen on the same worker as the 
+original processing attempt, as shown in the figure.
+NB: LOOK AT THE DIAGRAMS 
+Because we encountered a failure while processing an element in the input bundle, we had to 
+reprocess all of the elements in the input bundle. This means the runner must throw away the 
+entire output of the bundle (including any state mutations and set timers) since all of the 
+results it contains will be recomputed.
+Note that if the failed transform is a ParDo, then the DoFn instance is torn down and abandoned.
+
+COUPLED FAILURE: FAILURES BETWEEN TRANSFORMS 
+If a failure to process an element in ParDo2 causes ParDo1 to re-execute, 
+these two steps are said to be co-failing.
+In figure 7, worker two successfully executes ParDo1 on all elements in bundle B. 
+However, the worker fails to process an element in bundle D, so ParDo2 fails (shown as the red X).
+As a result, the runner must discard and recompute the output of ParDo2. Because the runner was 
+executing ParDo1 and ParDo2 together, the output bundle from ParDo1 must also be thrown away, 
+and all elements in the input bundle must be retried. These two ParDos are co-failing.
+Note that the retry does not necessarily have the same processing time as the original attempt, 
+as shown in the diagram.
+All DoFns that experience coupled failures are terminated and must be torn down since 
+they aren’t following the normal DoFn lifecycle .
+Executing transforms this way allows a runner to avoid persisting elements between transforms, 
+saving on persistence costs.
